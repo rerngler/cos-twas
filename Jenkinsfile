@@ -58,7 +58,7 @@ pipeline {
           // Build container image using local Openshift cluster
           openshift.withCluster() {
             openshift.withProject() {
-              timeout (time: 10, unit: 'MINUTES') {
+              timeout (time: 30, unit: 'MINUTES') {
                 // run the build and wait for completion
                 def build = openshift.selector("bc", "${params.APPLICATION_NAME}").startBuild("--from-dir=.")
                                     
