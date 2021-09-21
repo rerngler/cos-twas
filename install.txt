@@ -1,0 +1,73 @@
+To install the cos-twas
+
+1. create the orderdb db2 database
+cd Common
+cp . db2/db2-db2u-0:/tmp
+oc exec db2-db2u-0 -n db2 -it bash --
+su -l db2inst1
+db2 create database ORDERDB
+db2 connect to ORDERDB user db2inst1 using db2inst1
+cd /tmp/tmp
+db2 -tf ./createOrderDB.sql
+db2 -tf ./initialDataSet.sql
+
+2. Create the projects
+cd Deployment/OpenShift
+oc apply -f ssc.yaml
+
+oc create -f twas-projects.yaml
+
+# create the service account
+oc create serviceaccount websphere -n cos-twas-dev
+oc create serviceaccount websphere -n cos-twas-stage
+oc create serviceaccount websphere -n cos-twas-prod
+oc adm policy add-scc-to-user ibm-websphere-scc -z websphere -n cos-twas-dev
+oc adm policy add-scc-to-user ibm-websphere-scc -z websphere -n cos-twas-stage
+oc adm policy add-scc-to-user ibm-websphere-scc -z websphere -n cos-twas-prod
+
+# Deploy jenkins
+oc project cos-twas-build
+oc new-app jenkins-persistent
+
+# wait for jenkins to startup
+oc policy add-role-to-user edit system:serviceaccount:cos-twas-build:jenkins -n cos-twas-dev
+oc policy add-role-to-user edit system:serviceaccount:cos-twas-build:jenkins -n cos-twas-stage
+oc policy add-role-to-user edit system:serviceaccount:cos-twas-build:jenkins -n cos-twas-prod
+
+
+# load the templates
+oc create -f template-twas-deploy.yaml -n cos-twas-dev
+oc create -f template-twas-deploy.yaml -n cos-twas-stage
+oc create -f template-twas-deploy.yaml -n cos-twas-prod
+
+# create the deployment definitions
+
+oc new-app gse-twas-deploy -p APPLICATION_NAME=cos-twas -n cos-twas-dev
+oc new-app gse-twas-deploy -p APPLICATION_NAME=cos-twas -n cos-twas-stage
+oc new-app gse-twas-deploy -p APPLICATION_NAME=cos-twas -n cos-twas-prod
+
+# import the build template
+oc create -f template-twas-build.yaml -n cos-twas-build
+
+3. Create the build definition
+oc new-app gse-twas-build -p APPLICATION_NAME=cos-twas -p SOURCE_URL="https://github.com/rerngler/cos-twas" -n cos-twas-build
+
+4. run the cos-twas-pipeline
+$oc get bc
+NAME                TYPE              FROM        LATEST
+cos-twas            Docker            Binary      0
+cos-twas-pipeline   JenkinsPipeline   Git@was90   0
+
+oc start-build cos-twas-pipeline
+
+5. Monitor and ensure that the pod runs to completion.
+$ oc get pods
+NAME               READY   STATUS              RESTARTS   AGE
+jenkins-1-deploy   0/1     Completed           0          10m
+jenkins-1-mxxh7    1/1     Running             0          10m
+maven-l50v4        0/1     ContainerCreating   0          13s
+
+
+
+
+
